@@ -1,0 +1,6 @@
+kid Injection	kid: "../dev/null" → empty key, sign w/ ""	Sanitize/validate kid param
+Weak Secret	secret=123456 brute-forced	32+ random bytes, env vars, never code
+No Signature Check	jwt.decode() instead of verify()	Always verify(), never just decode
+Missing Claims	No exp/iss/aud validation	Check exp < now, iss matches, aud correct
+JWK/JKU Abuse	Attacker hosts own public key	Pin keys, validate JWK URLs, no remote fetch
+Token Leakage	JWT in URL/logs → stolen	HTTPS only, short expiry, HttpOnly cookies
