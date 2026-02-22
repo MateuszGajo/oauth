@@ -138,4 +138,41 @@
 // user agent base application is a public client
 // native application is a public client. Only dynamicall issuded credential sucha sa acess token or refresh tokens can recive an acceptable leve of protcetion.
 
- 
+//Protocol endpoints:
+// Authorization endpoint - used by the client to obtain authrozation from t he resource owner via user-agent redierction.
+// Token endpoint - used by the client to exchange authorization grant for  an access token, typically with the client authentication.
+// Redirection endpoint- used by the authorization server to return responses containing authorization credetnials to the client via the resource owner user-agent.
+
+// Extension may defined additional endp;oints as needed.
+
+
+
+// Authroization code grant
+
+
+{    //  +----------+
+//  | Resource |
+//  |   Owner  |
+//  |          |
+//  +----------+
+//       ^
+//       |
+//      (B)
+//  +----|-----+          Client Identifier      +---------------+
+//  |         -+----(A)-- & Redirection URI ---->|               |
+//  |  User-   |                                 | Authorization |
+//  |  Agent  -+----(B)-- User authenticates --->|     Server    |
+//  |          |                                 |               |
+//  |         -+----(C)-- Authorization Code ---<|               |
+//  +-|----|---+                                 +---------------+
+//    |    |                                         ^      v
+//   (A)  (C)                                        |      |
+//    |    |                                         |      |
+//    ^    v                                         |      |
+//  +---------+                                      |      |
+//  |         |>---(D)-- Authorization Code ---------'      |
+//  |  Client |          & Redirection URI                  |
+//  |         |                                             |
+//  |         |<---(E)----- Access Token -------------------'
+//  +---------+       (w/ Optional Refresh Token)}
+
