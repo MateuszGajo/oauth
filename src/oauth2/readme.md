@@ -176,3 +176,26 @@
 //  |         |<---(E)----- Access Token -------------------'
 //  +---------+       (w/ Optional Refresh Token)}
 
+
+why use state?
+
+The Attack Step by Step
+
+    Attacker starts the OAuth flow on your app using their own GitHub account
+
+    GitHub redirects them back to https://yourapp.com/callback?code=attacker_code
+
+    The attacker stops here — they don't complete the flow
+
+    Instead, they craft a link to https://yourapp.com/callback?code=attacker_code and trick you (the victim) into clicking it (via email, image tag, whatever)
+
+    Your browser hits that callback URL — your app exchanges the attacker's code for a token
+
+    Your account is now linked to the attacker's GitHub identity
+
+
+
+If the app uses OAuth to link accounts (e.g. "Connect your GitHub")
+
+It's even worse — the attacker's GitHub account gets linked to the victim's existing account. Then the attacker just goes to the login page, clicks "Login with GitHub", uses their own GitHub credentials, and they're in — as the victim. Full account takeover.
+The core idea
