@@ -1,0 +1,14 @@
+{
+  "extends": "@tsconfig/node20/tsconfig.json",  // Node 20+ LTS, update for your version [web:39]
+  "compilerOptions": {
+    "outDir": "./dist",              // Compiled JS output
+    "rootDir": "./src",              // Source TS files
+    "strict": true,                  // Full strict mode (recommended) [web:37]
+    "skipLibCheck": true,            // Skip type checking of node_modules (faster)
+    "resolveJsonModule": true,       // Import JSON files
+    "declaration": true,             // Generate .d.ts files
+    "removeComments": true           // Strip comments from output
+  },
+  "include": ["src/**/*"],                 // Your source
+  "exclude": ["node_modules", "dist", "**/*.test.ts"]  // Ignore these
+}

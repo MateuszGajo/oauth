@@ -1,0 +1,32 @@
+{
+  "name": "oauth",
+  "version": "1.0.0",
+  "description": "",
+  "main": "jwt.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev:client": "tsx watch client.ts",
+    "dev:server": "tsx watch server.ts",
+    "dev:middle-box": "tsx watch middlebox.ts",
+    "dev": "concurrently \"npm run dev:client\" \"npm run dev:server\" \"npm run dev:middle-box\" "
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "body-parser": "^2.2.2",
+    "concurrently": "^9.2.1",
+    "dotenv": "^17.3.1",
+    "http-mitm-proxy": "^1.1.0",
+    "http-proxy-middleware": "^3.0.5",
+    "jsonwebtoken": "^8.0.0",
+    "native-dns": "^0.7.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  },
+  "devDependencies": {
+    "@tsconfig/node20": "^20.1.9",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/node": "^25.3.0"
+  }
+}

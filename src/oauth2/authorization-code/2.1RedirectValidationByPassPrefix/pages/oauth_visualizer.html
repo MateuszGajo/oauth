@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>OAuth MITM Attack Visualizer</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: "Segoe UI", sans-serif;
+            background: #0f1117;
+            color: #e0e0e0;
+            min-height: 100vh;
+            padding: 30px 20px;
+        }
+        h1 { text-align: center; font-size: 1.4rem; margin-bottom: 6px; color: #fff; }
+        .subtitle { text-align: center; font-size: 0.85rem; color: #888; margin-bottom: 30px; }
+
+        #stage {
+            max-width: 960px;
+            margin: 0 auto;
+            position: relative;
+        }
+
+        .components {
+            display: flex;
+            justify-content: space-between;
+            padding: 0 10px;
+        }
+        .component {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 140px;
+        }
+        .component-icon {
+            width: 64px; height: 64px;
+            border-radius: 16px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.8rem;
+            margin-bottom: 8px;
+            border: 2px solid transparent;
+            transition: border-color 0.3s, box-shadow 0.3s, transform 0.3s;
+        }
+        .component-label { font-size: 0.8rem; font-weight: 600; text-align: center; color: #ccc; }
+        .component-sublabel { font-size: 0.68rem; color: #666; text-align: center; margin-top: 2px; }
+
+        .user-agent .component-icon { background: #1a2a4a; }
+        .client     .component-icon { background: #1a3a2a; }
+        .middlebox  .component-icon { background: #3a1a1a; }
+        .server     .component-icon { background: #2a1a3a; }
+        .attacker   .component-icon { background: #3a2a0a; }
+
+        .component.active .component-icon { border-color: #4a9eff; box-shadow: 0 0 18px rgba(74,158,255,0.5); transform: scale(1.08); }
+        .component.evil.active .component-icon { border-color: #ff4a4a; box-shadow: 0 0 18px rgba(255,74,74,0.5); }
+
+        #arrowCanvas {
+            display: block;
+            width: 100%;
+            height: 60px;
+            margin-top: 4px;
+        }
+
+        .controls {
+            max-width: 960px;
+            margin: 16px auto;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .btn {
+            padding: 10px 22px;
+            border-radius: 8px;
+            border: none;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .btn-next { background: #4a9eff; color: #000; }
+        .btn-next:hover { background: #6ab4ff; }
+        .btn-next:disabled { background: #2a3a4a; color: #555; cursor: not-allowed; }
+        .btn-reset { background: #2a2d3a; color: #aaa; }
+        .btn-reset:hover { background: #3a3d4a; color: #fff; }
+        .step-indicator { font-size: 0.8rem; color: #666; margin-left: auto; }
+
+        .log-panel {
+            max-width: 960px;
+            margin: 0 auto;
+            background: #1a1d27;
+            border-radius: 12px;
+            padding: 16px 20px;
+            min-height: 100px;
+            border: 1px solid #2a2d3a;
+        }
+        .log-panel h3 { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; color: #555; margin-bottom: 10px; }
+        .log-entry {
+            font-size: 0.82rem;
+            padding: 8px 12px;
+            margin-bottom: 8px;
+            border-radius: 6px;
+            border-left: 3px solid #4a9eff;
+            background: #12151f;
+            animation: fadeIn 0.4s ease;
+            line-height: 1.6;
+        }
+        .log-entry.evil { border-left-color: #ff4a4a; background: #1f1212; }
+        .log-entry .tag { font-weight: 700; display: block; margin-bottom: 2px; }
+        .log-entry .url { font-family: monospace; font-size: 0.76rem; color: #888; display: block; margin-top: 4px; word-break: break-all; }
+        .hi { color: #ff4a4a; font-weight: 600; }
+        .ok { color: #4aff88; font-weight: 600; }
+
+        @keyframes fadeIn { from { opacity:0; transform: translateX(-8px); } to { opacity:1; transform: none; } }
+    </style>
+</head>
+<body>
+
+    <h1>🔐 OAuth MITM Attack Visualizer</h1>
+ <p class="subtitle">
+    This happened due to poor <code>redirect_uri</code> validation on the authorization server.
+    The server does not perform an exact origin match — it only checks if the URI 
+    <em>starts with</em> a trusted domain. In a real-world scenario, a legitimate app 
+    might register <code>https://legit.com</code>, but an attacker can bypass this by 
+    using <code>https://legit.com.evil.net</code> — which passes the prefix check but 
+    delivers the authorization code straight to the attacker's server.
+</p>
+    <p class="subtitle">Step through a redirect_uri hijack attack</p>
+
+<div id="stage">
+    <div class="components">
+        <div class="component user-agent" id="c-useragent">
+            <div class="component-icon">🌐</div>
+            <div class="component-label">User-Agent</div>
+        </div>
+        <div class="component client" id="c-client">
+            <div class="component-icon">🖥️</div>
+            <div class="component-label">Client Server</div>
+            <div class="component-sublabel">Your App :3001</div>
+        </div>
+        <div class="component middlebox" id="c-middlebox">
+            <div class="component-icon">⚠️</div>
+            <div class="component-label">Middlebox</div>
+            <div class="component-sublabel">Attacker Proxy :8080</div>
+        </div>
+        <div class="component server" id="c-server">
+            <div class="component-icon">🔒</div>
+            <div class="component-label">Auth Server</div>
+            <div class="component-sublabel">GitHub OAuth</div>
+        </div>
+        <div class="component attacker" id="c-attacker">
+            <div class="component-icon">💀</div>
+            <div class="component-label">Attacker</div>
+            <div class="component-sublabel">Token Stealer :3003</div>
+        </div>
+    </div>
+    <canvas id="arrowCanvas"></canvas>
+</div>
+
+<div class="controls">
+    <button class="btn btn-next" id="btnNext">▶ Next Step</button>
+    <button class="btn btn-reset" id="btnReset">↺ Reset</button>
+    <span class="step-indicator" id="stepInd">Step 0 / 6</span>
+</div>
+
+<div class="log-panel">
+    <h3>Event Log</h3>
+    <div id="log"></div>
+</div>
+
+<script>
+(function () {
+    const COMPS = ["client", "useragent", "middlebox", "server", "attacker"];
+
+    const STEPS = [
+        {
+            from: "useragent", to: "client", evil: false,
+            active: ["useragent", "client"],
+            tag: "Step 1 — USER-AGENT → CLIENT",
+            text: "User clicks \"Login with GitHub\". Browser sends authorization request to the client server.",
+            url: "GET http://localhost:3001/oauth/authorize?client_id=Ov23li...&redirect_uri=oauthclient:3000/callback"
+        },
+        {
+            from: "client", to: "middlebox", evil: true,
+            active: ["client", "middlebox"],
+            tag: "Step 2 — CLIENT → MIDDLEBOX (intercepted!)",
+            text: "Request passes through the middlebox. It silently <span class='hi'>replaces redirect_uri</span> with the attacker's server before forwarding.",
+            url: "redirect_uri changed: oauthclient:3000/callback  →  <span class='hi'>oauthclientattacker:3001/callback</span>"
+        },
+        {
+            from: "middlebox", to: "server", evil: true,
+            active: ["middlebox", "server"],
+            tag: "Step 3 — MIDDLEBOX → AUTH SERVER",
+            text: "Tampered request arrives at GitHub. GitHub sees a valid client_id and shows the user the consent screen.",
+            url: "GET https://github.com/login/oauth/authorize?client_id=Ov23li...&redirect_uri=<span class='hi'>http://oauthclientattacker:3001/callback</span>"
+        },
+        {
+            from: "server", to: "attacker", evil: true,
+            active: ["server", "attacker"],
+            tag: "Step 4 — AUTH SERVER → ATTACKER 💀",
+            text: "User approves the login. GitHub redirects to <span class='hi'>the attacker's server</span> with the authorization code — not your app!",
+            url: "GET <span class='hi'>http://oauthclientattacker:3001/callback</span>?code=1b573a83-dbac-47a0-97c2-b2791a14671a"
+        },
+        {
+            from: "attacker", to: "server", evil: true,
+            active: ["attacker", "server"],
+            tag: "Step 5 — ATTACKER → AUTH SERVER",
+            text: "Attacker exchanges the stolen code for an access token using their own client_secret.",
+            url: "POST https://github.com/login/oauth/access_token  {code: '1b573a83...', client_id, client_secret}"
+        },
+        {
+            from: "server", to: "attacker", evil: true,
+            active: ["server", "attacker"],
+            tag: "Step 6 — AUTH SERVER → ATTACKER ✓",
+            text: "<span class='hi'>Attack complete!</span> Attacker receives the victim's access token and has full access to their GitHub account.",
+            url: "{ <span class='hi'>access_token: 'gho_xXxXxXxXxXxXxXxXxXxXxXxXxXxX'</span>, token_type: 'bearer', scope: 'read:user' }"
+        }
+    ];
+
+    let step = -1;
+    const canvas = document.getElementById("arrowCanvas");
+    const ctx = canvas.getContext("2d");
+
+    function getX(id) {
+        const stage = document.getElementById("stage");
+        const el = document.getElementById("c-" + id);
+        const sr = stage.getBoundingClientRect();
+        const er = el.getBoundingClientRect();
+        return (er.left - sr.left) + er.width / 2;
+    }
+
+    function resizeCanvas() {
+        canvas.width = canvas.offsetWidth;
+        canvas.height = 60;
+    }
+
+    function drawArrow(fromId, toId, evil) {
+        resizeCanvas();
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const x1 = getX(fromId);
+        const x2 = getX(toId);
+        const y = 30;
+        const color = evil ? "#ff4a4a" : "#4a9eff";
+        const dir = x2 > x1 ? 1 : -1;
+
+        ctx.beginPath();
+        ctx.moveTo(x1, y);
+        ctx.lineTo(x2 - dir * 14, y);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2.5;
+        ctx.setLineDash([6, 4]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        ctx.beginPath();
+        ctx.moveTo(x2, y);
+        ctx.lineTo(x2 - dir * 13, y - 7);
+        ctx.lineTo(x2 - dir * 13, y + 7);
+        ctx.closePath();
+        ctx.fillStyle = color;
+        ctx.fill();
+    }
+
+    function clearActive() {
+        COMPS.forEach(id => {
+            const el = document.getElementById("c-" + id);
+            el.className = el.className.replace(/\s*(active|evil)/g, "").trim();
+        });
+    }
+
+    function addLog(s) {
+        const div = document.createElement("div");
+        div.className = "log-entry" + (s.evil ? " evil" : "");
+        div.innerHTML = `<span class="tag">${s.tag}</span>${s.text}<span class="url">${s.url}</span>`;
+        document.getElementById("log").appendChild(div);
+        div.scrollIntoView({ behavior: "smooth" });
+    }
+
+    function nextStep() {
+        step++;
+        if (step >= STEPS.length) return;
+
+        const s = STEPS[step];
+        clearActive();
+        s.active.forEach(id => {
+            const el = document.getElementById("c-" + id);
+            el.classList.add("active");
+            if (s.evil) el.classList.add("evil");
+        });
+
+        drawArrow(s.from, s.to, s.evil);
+        addLog(s);
+
+        document.getElementById("stepInd").textContent = "Step " + (step + 1) + " / " + STEPS.length;
+        if (step === STEPS.length - 1) document.getElementById("btnNext").disabled = true;
+    }
+
+    function reset() {
+        step = -1;
+        clearActive();
+        resizeCanvas();
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        document.getElementById("log").innerHTML = "";
+        document.getElementById("stepInd").textContent = "Step 0 / " + STEPS.length;
+        document.getElementById("btnNext").disabled = false;
+    }
+
+    document.getElementById("btnNext").addEventListener("click", nextStep);
+    document.getElementById("btnReset").addEventListener("click", reset);
+    window.addEventListener("resize", () => {
+        if (step >= 0) {
+            const s = STEPS[step];
+            drawArrow(s.from, s.to, s.evil);
+        }
+    });
+
+    resizeCanvas();
+})();
+</script>
+</body>
+</html>
