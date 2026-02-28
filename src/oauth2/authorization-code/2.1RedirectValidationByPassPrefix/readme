@@ -1,0 +1,2 @@
+http://localhost:3001/oauth/authorize?client_id=Ov23limMyilLzcUKBbvc&redirect_uri=http%3A%2F%2Foauthclient%3A3000%40oauthclientattacker%3A3003
+decoded: redirect_uri=http://oauthclient:3000@oauthclientattacker:3003

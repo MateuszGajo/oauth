@@ -1,19 +1,38 @@
 import express from 'express'
 import bodyParser from 'body-parser'
 import crypto from 'crypto'
-const Url = require('url-parse');
+import qs from 'qs'
 
 const app = express();
 
 app.use(bodyParser.json())
 app.use(bodyParser.urlencoded({ extended: false }))
 
+interface ClientData {
+    redirectUrl: string
+}
+
+const db: Record<string, ClientData> = {}
+
+app.post("/client/register", (req, res) => {
+    const { clientId, redirectUrl } = req.body
+    if (!clientId) return res.status(400).send("clientId is missing")
+    if (!redirectUrl) return res.status(400).send("redirect url is missing")
+    db[clientId] = { redirectUrl }
+    console.log(`client: ${clientId} registered with redirect ${redirectUrl}`)
+    res.sendStatus(204);
+})
+
 app.get("/oauth/authorize", (req, res) => {
     if (typeof req.query.client_id !== "string") {
         return res.status(400).send("Invalid client_id");
     }
 
-    const { client_id, redirect_uri } = req.query;
+    const { client_id } = req.query;
+
+    const redirect_uris = Array.isArray(req.query.redirect_uri)
+        ? req.query.redirect_uri as string[]
+        : [req.query.redirect_uri as string];
 
     res.send(`<!DOCTYPE html>
 <html lang="en">
@@ -50,9 +69,9 @@ app.get("/oauth/authorize", (req, res) => {
             Requested scope: <span>read:user</span><br>
             Client ID: <span>${client_id}</span>
         </div>
-        <form method="POST" action="/oauth/authorize">
+        <form method="GET" action="/oauth/confirm">
             <input type="hidden" name="client_id" value="${client_id}" />
-            <input type="hidden" name="redirect_uri" value="${redirect_uri}" />
+            ${redirect_uris.map(uri => `<input type="hidden" name="redirect_uri" value="${uri}" />`).join("\n            ")}
             <div class="field">
                 <label>Username</label>
                 <input type="text" name="username" value="john_doe" />
@@ -68,64 +87,39 @@ app.get("/oauth/authorize", (req, res) => {
 </html>`);
 });
 
-interface ClientData {
-    redirectUrl: string
-}
+const validateRedirectUri = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const { client_id } = req.query as Record<string, string>;
 
-const db: Record<string, ClientData>  = {}
-
-// simplified register process for demonstration purposes normally don't do that
-app.post("/client/register", (req,res) => {
-    const {clientId, redirectUrl} = req.body
-
-
-    if (!clientId) { 
-        return res.status(400).send("clientId is missing")
-    }
-
-    if (!redirectUrl) {
-        return res.status(400).send("redirect url is missing")
-    }
-
-    console.log(`client: ${clientId} registered with redirect ${redirectUrl}`)
-
-    db[clientId] = {
-        redirectUrl: redirectUrl
-    }
-
-    res.sendStatus(204);
-})
-
-app.post("/oauth/authorize", (req, res) => {
-    const { redirect_uri, client_id } = req.body;
-
-
-    if (!redirect_uri) {
-        return res.status(400).send("Missing redirect_uri");
-    }
-
-    if (typeof redirect_uri != 'string') {
-        return res.status(400).send("redirect_uri should be a string");
-    }
-
+    if (!client_id) return res.status(400).send("Missing client_id");
 
     const clientUrl = db[client_id]?.redirectUrl;
+    console.log(db)
+    if (!clientUrl) return res.status(400).send("Unknown client_id");
 
-    // VULNERABLE: url-parse 1.5.6 sees host → oauthclientattacker:3003
-    // but parsed.host check passes because clientUrl appears as username
-    const parsed = new Url(redirect_uri);
-    const parsedClient = new Url(clientUrl);
+    const forValidation = qs.parse(req.url.split("?")[1], { duplicates: "first" });
+    const uriToValidate = forValidation["redirect_uri"] as string;
 
-    if (clientUrl && !parsed.href.includes(parsedClient.host)) {
-        return res.status(400).send("redirect_uri doesnt match");
+    if (!uriToValidate) return res.status(400).send("Missing redirect_uri");
+
+    if (uriToValidate !== clientUrl) {
+        return res.status(400).send("redirect_uri doesn't match");
     }
 
-    const params = new URLSearchParams({
-        code: crypto.randomUUID(),
-    });
+    next();
+};
 
-    console.log("redirecting to", `${redirect_uri}?${params}`);
-    res.redirect(`${redirect_uri}?${params}`);
+app.get("/oauth/confirm", validateRedirectUri, (req, res) => {
+
+
+    const url = qs.parse(req.url.split("?")[1], { duplicates: "last", comma: true });
+    const redirectUri = url["redirect_uri"] as string;
+
+
+    const code = crypto.randomUUID();
+
+    // redirects to evil.com 💀
+    console.log("redirecting to", `${redirectUri}?code=${code}`);
+    res.redirect(`${redirectUri}?code=${code}`);
 });
 
-app.listen(3001, () => console.log("app listening on port 3001"));
+app.listen(3001, () => console.log("Auth server listening on port 3001"));

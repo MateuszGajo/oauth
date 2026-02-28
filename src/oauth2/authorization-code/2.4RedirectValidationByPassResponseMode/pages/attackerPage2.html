@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>...</title>
+    <style>
+        body { font-family: "Segoe UI", sans-serif; background: #0f1117; color: #e0e0e0;
+               min-height: 100vh; display: flex; align-items: center; justify-content: center; flex-direction: column; text-align: center; }
+        .hacked-icon { font-size: 4rem; margin-bottom: 20px; }
+        .hacked-title { font-size: 2rem; font-weight: 800; color: #ff4a4a; margin-bottom: 10px; }
+        .hacked-sub { font-size: 1rem; color: #888; margin-bottom: 8px; }
+        .code-box { background: #1a1d27; border: 1px solid #ff4a4a33; border-radius: 10px;
+                    padding: 14px 20px; margin: 20px auto; max-width: 480px;
+                    font-family: monospace; font-size: 0.82rem; color: #ff8888; word-break: break-all; text-align: left; }
+        .code-label { font-size: 0.7rem; color: #555; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+        .mode-badge { display: inline-block; font-size: 0.7rem; font-family: monospace;
+                      background: #2a1a1a; border: 1px solid #ff4a4a55; border-radius: 4px;
+                      padding: 2px 8px; color: #ff6a6a; margin-bottom: 16px; }
+        .btn { background: #ff4a4a; color: #fff; border: none; border-radius: 8px;
+               padding: 13px 28px; font-size: 0.95rem; font-weight: 700; cursor: pointer; margin-top: 20px; text-decoration: none; display: inline-block; }
+        .btn:hover { background: #ff6a6a; }
+    </style>
+</head>
+<body>
+    <div class="hacked-icon">💀</div>
+    <div class="hacked-title">You just got hacked.</div>
+    <div class="hacked-sub">You thought you were logging into MyApp with GitHub.</div>
+    <div class="hacked-sub">A middlebox silently stole your authorization code.</div>
+    <div class="mode-badge" id="modeBadge">mode: query</div>
+    <div class="code-box">
+        <div class="code-label">Stolen authorization code</div>
+        <span id="stolenCode">waiting...</span>
+    </div>
+    <div class="code-box" id="fragmentBox" style="display:none">
+        <div class="code-label">Stolen via fragment (#)</div>
+        <span id="stolenFragment">—</span>
+    </div>
+    <div class="code-box" id="postMessageBox" style="display:none">
+        <div class="code-label">Stolen via postMessage</div>
+        <span id="stolenPostMessage">—</span>
+    </div>
+    <div>Did you notice anything wrong?</div>
+    <a class="btn" id="showcaseBtn" href="/showcase2">👁 Show me what happened</a>
+
+    <script>
+        let mode = "unknown";
+        const code = localStorage.getItem("stolenCode");
+        console.log("code", code)
+
+            mode = "web_messages";
+      
+        if (code) {
+            document.getElementById("stolenCode").textContent = code;
+            document.getElementById("modeBadge").textContent = `mode: ${mode}`;
+            document.getElementById("showcaseBtn").href = `/showcase2?code=${code}&mode=${mode}`;
+        }
+    </script>
+</body>
+</html>

@@ -33,7 +33,7 @@
             width: 140px;
         }
         .component-icon {
-            width: 64px; height: 64px;
+            width: 84px; height: 84px;
             border-radius: 16px;
             display: flex; align-items: center; justify-content: center;
             font-size: 1.8rem;
@@ -113,26 +113,29 @@
 </head>
 <body>
 
-    <h1>🔐 Redirect bypass: redirect to different subdomain</h1>
-<p class="subtitle">
-    This happened due to poor <code>redirect_uri</code> validation on the authorization server.
-    The server does not perform an exact origin match — it only checks if the URI 
-    <em>starts with</em> or <em>contains</em> a trusted string. In a real-world scenario, 
-    a legitimate app might register <code>https://legit.com</code>, but an attacker bypasses 
-    this with <code>https://legit.com.evil.net</code> — which passes the prefix check but 
-    delivers the authorization code to the attacker's server. 
-    
-    The same flaw applies to 
-    <code>localhost</code> — servers that allow any URI containing <code>localhost</code> 
-    for development purposes can be abused with <code>http://localhost.evil.net</code>, 
-    which passes the string check but resolves to a fully attacker-controlled server.
-
-    A third variant exploits URI parser confusion — a crafted URI like 
-    <code>https://legit.com&nbsp;&@evil.net#@bar.evil.net/</code> passes a naive 
-    string check because it starts with <code>https://legit.com</code>, but a 
-    spec-compliant parser treats everything before <code>@</code> as userinfo, 
-    meaning the browser actually navigates to <code>evil.net</code>.
+    <h1>🔐 Redirect bypass: response mode </h1>
+<p>
+    The OAuth 2.0 specification defines a <code>response_mode</code> parameter that controls
+    how the authorization server returns the authorization code back to the client —
+    either via a query string (<code>query</code>), URL fragment (<code>fragment</code>),
+    or a browser <code>postMessage</code> event (<code>web_message</code>).
+    A vulnerable authorization server applies strict <code>redirect_uri</code> validation
+    only for the default <code>query</code> mode, but relaxes or skips those checks entirely
+    for lesser-known modes like <code>fragment</code> and <code>web_message</code>.
+    A middlebox attacker intercepts the outgoing authorization request and silently injects
+    <code>response_mode=fragment</code> alongside a malicious <code>redirect_uri</code>
+    pointing to an attacker-controlled origin — bypassing validation because the server
+    treats non-query modes differently.
+    The authorization server then sends the stolen code via <code>postMessage()</code>
+    directly to the attacker's window, with the victim never noticing anything wrong,
+    since the popup simply closes and no redirect ever appears in the browser's address bar.
+    This attack is particularly dangerous because <code>web_message</code> mode is not
+    defined in core OAuth RFC 6749 — it comes from an IETF draft
+    (<code>draft-meyerzuselha-oauth-web-message-response-mode</code>) that is not yet
+    standardized, meaning implementations vary wildly and security validation is often
+    inconsistent or missing entirely.
 </p>
+
 
 
     <p class="subtitle">Step through a redirect_uri hijack attack</p>
@@ -158,7 +161,7 @@
             <div class="component-label">Auth Server</div>
             <div class="component-sublabel">GitHub OAuth</div>
         </div>
-        <div class="component attacker" id="c-attacker">
+  <div class="component attacker" id="c-attacker">
             <div class="component-icon">💀</div>
             <div class="component-label">Attacker</div>
             <div class="component-sublabel">Token Stealer :3003</div>
@@ -187,29 +190,29 @@
             from: "useragent", to: "client", evil: false,
             active: ["useragent", "client"],
             tag: "Step 1 — USER-AGENT → CLIENT",
-            text: "User clicks \"Login with GitHub\". Browser sends authorization request to the client server.",
+            text: "User clicks \"Login with GitHub\". Browser sends authorization request to the client server in new window.",
             url: "GET http://localhost:3001/oauth/authorize?client_id=Ov23li...&redirect_uri=oauthclient:3000/callback"
         },
         {
             from: "client", to: "middlebox", evil: true,
             active: ["client", "middlebox"],
             tag: "Step 2 — CLIENT → MIDDLEBOX (intercepted!)",
-            text: "Request passes through the middlebox. It silently <span class='hi'>replaces redirect_uri</span> with the attacker's server before forwarding.",
-            url: "redirect_uri changed: oauthclient:3000/callback  →  <span class='hi'>oauthclientattacker:3001/callback</span>"
+            text: "Request passes through the middlebox. It <span class='hi'>replaces the window</span> with the attacker's server before forwarding.",
+            url: "Window origin change to →  <span class='hi'>http://oauthclientattacker:3003</span>"
         },
         {
             from: "middlebox", to: "server", evil: true,
             active: ["middlebox", "server"],
             tag: "Step 3 — MIDDLEBOX → AUTH SERVER",
             text: "Tampered request arrives at GitHub. GitHub sees a valid client_id and shows the user the consent screen.",
-            url: "GET https://github.com/login/oauth/authorize?client_id=Ov23li...&redirect_uri=<span class='hi'>http://oauthclientattacker:3001/callback</span>"
+            url: "GET https://github.com/login/oauth/authorize?client_id=Ov23li...&redirect_uri=<span class='hi'>http://oauthclientattacker:3003</span>&response_mode=<span class='hi'>web_message</span>"
         },
         {
             from: "server", to: "attacker", evil: true,
             active: ["server", "attacker"],
             tag: "Step 4 — AUTH SERVER → ATTACKER 💀",
             text: "User approves the login. GitHub redirects to <span class='hi'>the attacker's server</span> with the authorization code — not your app!",
-            url: "GET <span class='hi'>http://oauthclientattacker:3001/callback</span>?code=1b573a83-dbac-47a0-97c2-b2791a14671a"
+            url: "GET <span class='hi'>http://oauthclientattacker:3003</span>?code=1b573a83-dbac-47a0-97c2-b2791a14671a"
         },
         {
             from: "attacker", to: "server", evil: true,

@@ -1,0 +1,18 @@
+https://www.ietf.org/archive/id/draft-meyerzuselha-oauth-web-message-response-mode-00.html
+
+web_message
+You use it when your app opens the OAuth flow in a popup and wants to receive the code without any page navigation. The auth server sends the code via postMessage directly to the opener window.
+Scenario: A single-page app (SPA) where you don't want to lose the current page state. Instead of navigating away and back.
+Used by: Microsoft (MSAL.js), Google Identity Services, Auth0 — all use this pattern for SPAs to avoid full page redirects destroying in-memory app state.
+
+response_mode=fragment
+The code is returned in the URL hash (#) instead of the query string (?):
+Why fragment? The # part is never sent to the server — it's browser-only. So the code only exists client-side, your backend never sees it in server logs, proxy logs, or Referer headers.
+Scenario: SPAs that handle the callback entirely in JavaScript:
+
+The #code=abc123 part never leaves the browser. It's stripped before the request is made.
+
+Used by:
+Microsoft (MSAL.js) — Azure AD / Entra ID uses response_mode=fragment as the default for SPAs, their whole MSAL.js v1 library was built around reading window.location.hash
+Auth0 — supports fragment mode for SPAs, documented as the implicit flow delivery method
+Okta — their older JS SDK used fragment delivery for implicit flow tokens
