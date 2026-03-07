@@ -39,6 +39,8 @@ Even when a whitelist exists, validation can often be bypassed:​
 
     link: https://dl.acm.org/doi/fullHtml/10.1145/3627106.3627140
 
+    TODO: LOOK AT All redirect and when attackers exchanges code for access token it should use actually real client because it doesnt have credentials to do that
+
 3. Stealing Codes via Proxy Page (Open Redirect Chain)
 
 When you can't point redirect_uri to an external domain directly, you redirect it to another page on the whitelisted domain that has an open redirect — then chain that redirect to your server. The code/token hops through the trusted domain on its way to the attacker.​
@@ -53,3 +55,23 @@ If JS injection is blocked (CSP etc.), inject an <img src="evil.net"> on the red
 7. xss injected The most popular Node.js OAuth library (through v3.1.1) only checked that redirect_uri matched a weak regex — allowing full XSS payloads to pass through.
 
 Insecure web messaging scripts (postMessage etc.) on the whitelisted domain can be chained as gadgets — passing the code/token through a series of scripts until it leaks to an external domain.
+
+
+Reusability of an OAuth access token
+Host Header Injection
+Access Token Leakage
+
+
+Pre-Account Takeover
+
+Pre-account takeover takes place when an attacker registers to the client application using victims’ email, prior to victim registering himself with the application. To test if the OAuth flow is vulnerable to this, the below steps can be followed:-
+
+    Attacker creates an account using the normal signup process using the victim’s email address before the victim has registered on the client application
+    The attacker would be asked to verify the email address
+    The victim tries to register using a different signup method with the same email address using the OAuth flow.
+    The victim logs into the client application which bypasses the email verification step for the attacker.
+    The attacker would be able to log in as the victim and read all the data that has been added by the victim by using the victim’s email address and the attacker’s password .
+
+In this scenario just by knowing the email address, the attacker can take over the victim’s account completely without the victim’s knowledge. While creating a new account proper email validation should be done. Users should not be allowed to create a new account if already another account with the same email id has been created.
+
+https://medium.com/@ibm_ptc_security/oauth-2-0-security-and-vulnerabilities-86e64c22b03d

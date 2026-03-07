@@ -21,28 +21,18 @@ app.get("/redirect", (req, res) => {
 });
 
 
-app.options("/code", (req, res) => {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type"); 
+app.get("/code", (req, res) => {
+    const {redirect_uri, ...rest} = req.query
 
-    res.sendStatus(204)
+       const params = new URLSearchParams({
+        ...rest as any
+    });
+    console.log(req.query)
+    console.log(`${redirect_uri}?${params}`)
+
+    res.redirect(`${redirect_uri}?${params}`)
 })
 
-
-app.post("/code", async(req, res) => {
-    const body = req.body;
-
-    console.log({
-        client_id: clientId,
-            client_secret: clientSecret,
-            code: body.code,
-    })
-
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.send("ok").status(200);
-
-
-})
 
 
 const registerClient = async () => {

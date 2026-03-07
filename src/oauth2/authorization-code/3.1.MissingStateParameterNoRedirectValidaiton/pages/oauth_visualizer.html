@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>OAuth MITM Attack Visualizer</title>
+    <title>OAuth CSRF Attack Visualizer</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
@@ -13,7 +13,7 @@
             padding: 30px 20px;
         }
         h1 { text-align: center; font-size: 1.4rem; margin-bottom: 6px; color: #fff; }
-        .subtitle { text-align: center; font-size: 0.85rem; color: #888; margin-bottom: 30px; }
+        .subtitle { text-align: center; font-size: 0.85rem; color: #888; margin-bottom: 30px; max-width: 760px; margin-left: auto; margin-right: auto; line-height: 1.7; }
 
         #stage {
             max-width: 960px;
@@ -33,7 +33,7 @@
             width: 140px;
         }
         .component-icon {
-            width: 84px; height: 84px;
+            width: 64px; height: 64px;
             border-radius: 16px;
             display: flex; align-items: center; justify-content: center;
             font-size: 1.8rem;
@@ -46,7 +46,6 @@
 
         .user-agent .component-icon { background: #1a2a4a; }
         .client     .component-icon { background: #1a3a2a; }
-        .middlebox  .component-icon { background: #3a1a1a; }
         .server     .component-icon { background: #2a1a3a; }
         .attacker   .component-icon { background: #3a2a0a; }
 
@@ -113,35 +112,34 @@
 </head>
 <body>
 
-    <h1>🔐 Redirect bypass: redirect chains </h1>
-<p class="subtitle">A redirect chain is a series of HTTP 302 redirects that carry the authorization code from the auth server back to the client — an attacker exploits this by injecting a malicious <code>redirect_uri</code> to intercept the code mid-chain.</p>
+    <h1>🎭 CSRF Attack Visualizer</h1>
+    <p class="subtitle">
+        In a CSRF attack, the attacker crafts a malicious OAuth authorization URL using
+        their own <code>redirect_uri</code> and tricks the victim into clicking it.
+        The victim authenticates believing it is legitimate — but the authorization code
+        is delivered to the <span style="color:#ff4a4a;font-weight:600">attacker's server</span>,
+        not the real app. Without a <code>state</code> parameter, the client has no way
+        to detect that it never initiated this flow.
+    </p>
 
+    <p class="subtitle">Step through the CSRF OAuth attack</p>
 
 <div id="stage">
     <div class="components">
+        <div class="component attacker" id="c-attacker">
+            <div class="component-icon">💀</div>
+            <div class="component-label">Attacker</div>
+            <div class="component-sublabel">Malicious Actor :3003</div>
+        </div>
         <div class="component user-agent" id="c-useragent">
             <div class="component-icon">🌐</div>
-            <div class="component-label">User-Agent</div>
-        </div>
-        <div class="component client" id="c-client">
-            <div class="component-icon">🖥️</div>
-            <div class="component-label">Client Server</div>
-            <div class="component-sublabel">Your App :3001</div>
-        </div>
-        <div class="component middlebox" id="c-middlebox">
-            <div class="component-icon">⚠️</div>
-            <div class="component-label">Middlebox</div>
-            <div class="component-sublabel">Attacker Proxy :8080</div>
+            <div class="component-label">Victim Browser</div>
+            <div class="component-sublabel">User-Agent</div>
         </div>
         <div class="component server" id="c-server">
             <div class="component-icon">🔒</div>
             <div class="component-label">Auth Server</div>
             <div class="component-sublabel">GitHub OAuth</div>
-        </div>
-  <div class="component attacker" id="c-attacker">
-            <div class="component-icon">💀</div>
-            <div class="component-label">Attacker</div>
-            <div class="component-sublabel">Token Stealer :3003</div>
         </div>
     </div>
     <canvas id="arrowCanvas"></canvas>
@@ -160,58 +158,49 @@
 
 <script>
 (function () {
-    const COMPS = ["client", "useragent", "middlebox", "server", "attacker"];
+    const COMPS = ["attacker", "useragent", "server"];
 
     const STEPS = [
         {
-            from: "useragent", to: "client", evil: false,
-            active: ["useragent", "client"],
-            tag: "Step 1 — USER-AGENT → CLIENT",
-            text: "User clicks \"Login with GitHub\". Browser sends authorization request to the client server.",
-            url: "GET http://localhost:3001/oauth/authorize?client_id=Ov23li...&redirect_uri=oauthclient:3000/callback"
+            from: "attacker", to: "useragent", evil: true,
+            active: ["attacker", "useragent"],
+            tag: "Step 1 — ATTACKER → VICTIM",
+            text: "Attacker sends victim a phishing link — disguised as a free offer, email notification, or promo. The URL is a crafted OAuth authorization request.",
+            url: "http://oauthclient:3000/phishing  →  \"🎁 Claim your $50 GitHub Credits!\""
         },
         {
-            from: "client", to: "server", evil: false,
-            active: ["client", "server"],
-            tag: "Step 2 — CLIENT → SERVER ",
-            text: "User approves the login.",
-            url: "GET http://oauthserver:3001/oauth/authorize?client_id=Ov23limMyilLzcUKBbvc&redirect_uri=http://oauthclient:3000/callback"
+            from: "useragent", to: "server", evil: true,
+            active: ["useragent", "server"],
+            tag: "Step 2 — VICTIM → AUTH SERVER",
+            text: "Victim clicks the link. Browser follows the OAuth URL — but <span class='hi'>redirect_uri points to the attacker's server</span>, not the real app.",
+            url: "GET http://oauthserver:3001/oauth/authorize?client_id=Ov23li...&<span class='hi'>redirect_uri=http://oauthclientattacker:3003/callback</span>"
         },
         {
-            from: "server", to: "middlebox", evil: true,
-            active: ["middlebox", "server"],
-            tag: "Step 3 — SERVER → MIDDLEBOX (Intercepted!)",
-                 text: "Request passes through the middlebox. <span class='hi'>It silently adds redirect_uri</span> with the attacker's server before forwarding.",
-            url: "http://oauthclient:3000/callback -> http://oauthclient:3000/callback&code=1b573a83-dbac-47a0-97c2-b2791a14671a&<span class='hi'>redirect_uri=http://oauthclientattacker:3001/attacker</span>"
-            // text: "Tampered request arrives at the authorization server. It validates the first redirect_uri — which matches the registered domain — but redirects using the last, attacker-injected value.",
-            // url: "GET https://github.com/login/oauth/authorize?client_id=Ov23li...&redirect_uri=<span class='hi'>http://oauthclientattacker:3001/attacker</span>"
-        },
-        {
-            from: "middlebox", to: "client", evil: true,
-            active: ["middlebox", "client"],
-            tag: "Step 4 — MIDDLEBOX → CLIENT",
-            text: "User is redirect to the client",
-            url: "GET http://oauthclient:3000/callback&code=1b573a83-dbac-47a0-97c2-b2791a14671a&<span class='hi'>redirect_uri=http://oauthclientattacker:3001/attacker</span>"
-        },
-        {
-            from: "client", to: "attacker", evil: true,
-            active: ["client", "attacker"],
-            tag: "Step 5 — CLIENT → ATTACKER 💀",
-            text: "Client allows for redirect_uri and doesnt properly validates it, we are forwarded to attacker site.",
-            url: "GET <span class='hi'>http://oauthclientattacker:3001/attacker&code=1b573a83-dbac-47a0-97c2-b2791a14671a<span class='hi'>"
-        },
-        {
-            from: "attacker", to: "server", evil: true,
-            active: ["attacker", "server"],
-            tag: "Step 6 — ATTACKER → AUTH SERVER",
-            text: "Attacker exchanges the stolen code for an access token using their own client_secret.",
-            url: "POST https://github.com/login/oauth/access_token  {code: '1b573a83...', client_id, client_secret}"
+            from: "useragent", to: "server", evil: true,
+            active: ["useragent", "server"],
+            tag: "Step 3 — VICTIM LOGS IN",
+            text: "Auth server shows a legitimate-looking login page. Victim enters credentials and clicks Authorize — believing they are logging into the real app.",
+            url: "POST http://oauthserver:3001/oauth/authorize  {username, password, client_id, redirect_uri=<span class='hi'>attacker</span>}"
         },
         {
             from: "server", to: "attacker", evil: true,
             active: ["server", "attacker"],
-            tag: "Step 7 — AUTH SERVER → ATTACKER ✓",
-            text: "<span class='hi'>Attack complete!</span> Attacker receives the victim's access token and has full access to their GitHub account.",
+            tag: "Step 4 — AUTH SERVER → ATTACKER 💀",
+            text: "Auth server validates the login and redirects to <span class='hi'>the attacker's redirect_uri</span> with the authorization code. Victim's code is now in attacker's hands.",
+            url: "302 → <span class='hi'>http://oauthclientattacker:3003/callback</span>?code=1b573a83-dbac-47a0-97c2-b2791a14671a"
+        },
+        {
+            from: "attacker", to: "server", evil: true,
+            active: ["attacker", "server"],
+            tag: "Step 5 — ATTACKER EXCHANGES CODE",
+            text: "Attacker's server receives the code and immediately exchanges it for an access token using their registered client_secret.",
+            url: "POST http://oauthserver:3001/oauth/token  {code: '1b573a83...', client_id, <span class='hi'>client_secret</span>}"
+        },
+        {
+            from: "server", to: "attacker", evil: true,
+            active: ["server", "attacker"],
+            tag: "Step 6 — ATTACK COMPLETE 💀",
+            text: "<span class='hi'>Attack complete!</span> Attacker now holds a valid access token for the victim's account. The legitimate client app never knew this flow happened — there was no <code>state</code> to verify.",
             url: "{ <span class='hi'>access_token: 'gho_xXxXxXxXxXxXxXxXxXxXxXxXxXxX'</span>, token_type: 'bearer', scope: 'read:user' }"
         }
     ];

@@ -1,6 +1,7 @@
 import express from 'express'
 import bodyParser from 'body-parser'
 import crypto from 'crypto'
+const Url = require('url-parse');
 
 const app = express();
 
@@ -75,8 +76,8 @@ const db: Record<string, ClientData>  = {}
 
 // simplified register process for demonstration purposes normally don't do that
 app.post("/client/register", (req,res) => {
-    console.log("client register?")
     const {clientId, redirectUrl} = req.body
+
 
     if (!clientId) { 
         return res.status(400).send("clientId is missing")
@@ -98,6 +99,7 @@ app.post("/client/register", (req,res) => {
 app.post("/oauth/authorize", (req, res) => {
     const { redirect_uri, client_id } = req.body;
 
+
     if (!redirect_uri) {
         return res.status(400).send("Missing redirect_uri");
     }
@@ -106,10 +108,16 @@ app.post("/oauth/authorize", (req, res) => {
         return res.status(400).send("redirect_uri should be a string");
     }
 
-    const clientUrl = db[client_id]?.redirectUrl
 
-    if (clientUrl && !redirect_uri.includes(clientUrl)) {
-        return res.status(400).send("redirect_uri doesnt match"); 
+    const clientUrl = db[client_id]?.redirectUrl;
+
+    // VULNERABLE: url-parse 1.5.6 sees host → oauthclientattacker:3003
+    // but parsed.host check passes because clientUrl appears as username
+    const parsed = new Url(redirect_uri);
+    const parsedClient = new Url(clientUrl);
+
+    if (clientUrl && !parsed.href.includes(parsedClient.host)) {
+        return res.status(400).send("redirect_uri doesnt match");
     }
 
     const params = new URLSearchParams({
@@ -117,7 +125,7 @@ app.post("/oauth/authorize", (req, res) => {
     });
 
     console.log("redirecting to", `${redirect_uri}?${params}`);
-    res.redirect(`http://proxy:8080/?${params}`);
+    res.redirect(`${redirect_uri}?${params}`);
 });
 
 app.listen(3001, () => console.log("app listening on port 3001"));
