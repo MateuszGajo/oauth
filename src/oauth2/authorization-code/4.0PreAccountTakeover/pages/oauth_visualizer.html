@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>OAuth CSRF Attack Visualizer</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: "Segoe UI", sans-serif;
+            background: #0f1117;
+            color: #e0e0e0;
+            min-height: 100vh;
+            padding: 30px 20px;
+        }
+        h1 { text-align: center; font-size: 1.4rem; margin-bottom: 6px; color: #fff; }
+        .subtitle {
+            text-align: center; font-size: 0.85rem; color: #888;
+            margin-bottom: 30px; max-width: 700px;
+            margin-left: auto; margin-right: auto; line-height: 1.7;
+        }
+        #stage { max-width: 960px; margin: 0 auto; position: relative; }
+        .components { display: flex; justify-content: space-between; padding: 0 10px; }
+        .component { display: flex; flex-direction: column; align-items: center; width: 140px; }
+        .component-icon {
+            width: 64px; height: 64px; border-radius: 16px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.8rem; margin-bottom: 8px;
+            border: 2px solid transparent;
+            transition: border-color 0.3s, box-shadow 0.3s, transform 0.3s;
+        }
+        .component-label { font-size: 0.8rem; font-weight: 600; text-align: center; color: #ccc; }
+        .component-sublabel { font-size: 0.68rem; color: #666; text-align: center; margin-top: 2px; }
+
+        .attacker   .component-icon { background: #3a1a1a; }
+        .user-agent .component-icon { background: #1a2a4a; }
+        .server     .component-icon { background: #2a1a3a; }
+        .client     .component-icon { background: #1a3a2a; }
+
+        .component.active .component-icon { border-color: #4a9eff; box-shadow: 0 0 18px rgba(74,158,255,0.4); transform: scale(1.08); }
+        .component.evil.active .component-icon { border-color: #ff4a4a; box-shadow: 0 0 18px rgba(255,74,74,0.4); }
+        .component.safe.active .component-icon { border-color: #4aff88; box-shadow: 0 0 18px rgba(74,255,136,0.4); }
+
+        #arrowCanvas { display: block; width: 100%; height: 60px; margin-top: 4px; }
+
+        .controls {
+            max-width: 960px; margin: 16px auto;
+            display: flex; gap: 10px; align-items: center;
+        }
+        .btn { padding: 10px 22px; border-radius: 8px; border: none; font-size: 0.85rem; font-weight: 600; cursor: pointer; }
+        .btn-next { background: #4a9eff; color: #000; }
+        .btn-next:hover { background: #6ab4ff; }
+        .btn-next:disabled { background: #2a3a4a; color: #555; cursor: not-allowed; }
+        .btn-reset { background: #2a2d3a; color: #aaa; }
+        .btn-reset:hover { background: #3a3d4a; color: #fff; }
+        .step-indicator { font-size: 0.8rem; color: #666; margin-left: auto; }
+
+        .log-panel {
+            max-width: 960px; margin: 0 auto;
+            background: #1a1d27; border-radius: 12px;
+            padding: 16px 20px; min-height: 100px;
+            border: 1px solid #2a2d3a;
+        }
+        .log-panel h3 { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; color: #555; margin-bottom: 10px; }
+        .log-entry {
+            font-size: 0.82rem; padding: 8px 12px; margin-bottom: 8px;
+            border-radius: 6px; border-left: 3px solid #4a9eff;
+            background: #12151f; animation: fadeIn 0.4s ease; line-height: 1.6;
+        }
+        .log-entry.evil  { border-left-color: #ff4a4a; background: #1f1212; }
+        .log-entry.safe  { border-left-color: #4aff88; background: #121f15; }
+        .log-entry .tag  { font-weight: 700; display: block; margin-bottom: 2px; }
+        .log-entry .url  { font-family: monospace; font-size: 0.76rem; color: #888; display: block; margin-top: 4px; word-break: break-all; }
+        .hi  { color: #ff4a4a; font-weight: 600; }
+        .ok  { color: #4aff88; font-weight: 600; }
+
+        .stolen-box {
+            max-width: 960px; margin: 0 auto 16px;
+            background: #1f1212; border: 1px solid #ff4a4a33;
+            border-radius: 10px; padding: 12px 20px;
+            font-family: monospace; font-size: 0.82rem; color: #ff8888;
+        }
+        .stolen-label { font-size: 0.7rem; color: #555; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+
+        @keyframes fadeIn { from { opacity:0; transform: translateX(-8px); } to { opacity:1; transform: none; } }
+    </style>
+</head>
+<body>
+
+<h1>🎭 CSRF OAuth Attack — What Just Happened</h1>
+<p class="subtitle">
+    The attacker started their own OAuth flow, obtained an authorization code for
+    <span class="hi">their own GitHub account</span>, then stopped — never completing the flow.
+    They sent you a crafted link with their code. You clicked it, the client exchanged it,
+    and your session was bound to the attacker's account.
+    No middlebox. No redirect bypass. Just a link.
+</p>
+
+<div class="stolen-box" id="stolenBox" style="display:none">
+    <div class="stolen-label">Attacker's authorization code used in this attack</div>
+    <span id="stolenCode">—</span>
+</div>
+
+<div id="stage">
+    <div class="components">
+        <div class="component attacker" id="c-attacker">
+            <div class="component-icon">💀</div>
+            <div class="component-label">Attacker</div>
+            <div class="component-sublabel">:3003</div>
+        </div>
+        <div class="component user-agent" id="c-useragent">
+            <div class="component-icon">🌐</div>
+            <div class="component-label">Victim Browser</div>
+            <div class="component-sublabel">User-Agent</div>
+        </div>
+        <div class="component client" id="c-client">
+            <div class="component-icon">🖥️</div>
+            <div class="component-label">Client App</div>
+            <div class="component-sublabel">:3000</div>
+        </div>
+        <div class="component server" id="c-server">
+            <div class="component-icon">🔒</div>
+            <div class="component-label">Auth Server</div>
+            <div class="component-sublabel">:3001</div>
+        </div>
+    </div>
+    <canvas id="arrowCanvas"></canvas>
+</div>
+
+<div class="controls">
+    <button class="btn btn-next" id="btnNext">▶ Next Step</button>
+    <button class="btn btn-reset" id="btnReset">↺ Reset</button>
+    <span class="step-indicator" id="stepInd">Step 0 / 6</span>
+</div>
+
+<div class="log-panel">
+    <h3>Event Log</h3>
+    <div id="log"></div>
+</div>
+
+<script>
+(function () {
+    const params = new URLSearchParams(window.location.search);
+    const stolenCode = params.get("code") || "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx";
+
+    if (params.get("code")) {
+        document.getElementById("stolenBox").style.display = "block";
+        document.getElementById("stolenCode").textContent = stolenCode;
+    }
+
+    const COMPS = ["attacker", "useragent", "client", "server"];
+
+    const STEPS = [
+{
+    from: "attacker", to: "client", evil: true,
+    active: ["attacker", "client"],
+    tag: "Step 1 — ATTACKER pre-registers using victim's email",
+    text: "Attacker visits the client app and creates an account using <span class='hi'>victim's email address</span>. They never confirm it. The account sits pending — and the attacker does nothing more. The trap is set.",
+    url: `POST http://oauthclient:3000/register { email: '<span class='hi'>victim@email.com</span>', password: '...' }`
+},
+{
+    from: "useragent", to: "server", evil: false,
+    active: ["useragent", "server"],
+    tag: "Step 2 — VICTIM logs in normally via social",
+    text: "Victim visits the app and clicks <span class='hi'>\"Log in with GitHub\"</span>. They authenticate normally — no tricks, no malicious links. Just a regular OAuth flow.",
+    url: `GET http://oauthserver:3001/oauth/authorize?client_id=...&redirect_uri=...&response_type=code`
+},
+{
+    from: "useragent", to: "client", evil: false,
+    active: ["useragent", "client"],
+    tag: "Step 3 — VICTIM is redirected back with a valid code",
+    text: "GitHub authenticates the victim and redirects them back to the client with a fresh authorization code. Everything looks completely normal.",
+    url: `GET http://oauthclient:3000/callback?code=<span class='hi'>${stolenCode}</span>`
+},
+{
+    from: "client", to: "server", evil: false,
+    active: ["client", "server"],
+    tag: "Step 4 — CLIENT exchanges the code",
+    text: "Client exchanges the code for an access token. GitHub returns the victim's profile — including their <span class='hi'>email address</span>.",
+    url: `POST http://oauthserver:3001/oauth/token { code: '${stolenCode}', client_id, client_secret }`
+},
+{
+    from: "server", to: "client", evil: false,
+    active: ["server", "client"],
+    tag: "Step 5 — TOKEN issued for victim's GitHub account",
+    text: "Auth server returns a valid token for the victim. The client now knows the victim's email. It searches for an existing account — and <span class='hi'>finds the attacker's unconfirmed one</span>.",
+    url: `{ access_token: 'gho_...', scope: 'read:user', email: '<span class='hi'>victim@email.com</span>' }`
+},
+{
+    from: "client", to: "client", evil: true,
+    active: ["client"],
+    tag: "Step 5.5 — CLIENT merges accounts without verification 💀",
+    text: "Client finds a pending account with a matching email and <span class='hi'>merges it with the victim's OAuth identity</span> — treating the successful OAuth login as email confirmation. No check that the pending account was created by someone else.",
+    url: `🔗 email match → unconfirmed account activated → linked to victim's GitHub`
+},
+{
+    from: "client", to: "useragent", evil: true,
+    active: ["client", "useragent"],
+    tag: "Step 6 — ATTACKER logs in as the victim 💀",
+    text: "<span class='hi'>Attack complete.</span> The attacker now logs into the client using the password they set in Step 1. The account is confirmed, active, and backed by the victim's GitHub identity. Victim has no idea.",
+    url: `✅ attacker logs in → authenticated as <span class='hi'>victim@email.com</span>`
+}
+
+
+    ];
+
+    let step = -1;
+    const canvas = document.getElementById("arrowCanvas");
+    const ctx = canvas.getContext("2d");
+
+    function getX(id) {
+        const stage = document.getElementById("stage");
+        const el = document.getElementById("c-" + id);
+        const sr = stage.getBoundingClientRect();
+        const er = el.getBoundingClientRect();
+        return (er.left - sr.left) + er.width / 2;
+    }
+
+    function resizeCanvas() {
+        canvas.width = canvas.offsetWidth;
+        canvas.height = 60;
+    }
+
+    function drawArrow(fromId, toId, evil, safe) {
+        resizeCanvas();
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const x1 = getX(fromId);
+        const x2 = getX(toId);
+        const y = 30;
+        const color = safe ? "#4aff88" : evil ? "#ff4a4a" : "#4a9eff";
+        const dir = x2 > x1 ? 1 : -1;
+
+        ctx.beginPath();
+        ctx.moveTo(x1, y);
+        ctx.lineTo(x2 - dir * 14, y);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2.5;
+        ctx.setLineDash([6, 4]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        ctx.beginPath();
+        ctx.moveTo(x2, y);
+        ctx.lineTo(x2 - dir * 13, y - 7);
+        ctx.lineTo(x2 - dir * 13, y + 7);
+        ctx.closePath();
+        ctx.fillStyle = color;
+        ctx.fill();
+    }
+
+    function clearActive() {
+        COMPS.forEach(id => {
+            const el = document.getElementById("c-" + id);
+            el.className = el.className.replace(/\s*(active|evil|safe)/g, "").trim();
+        });
+    }
+
+    function addLog(s) {
+        const div = document.createElement("div");
+        div.className = "log-entry" + (s.safe ? " safe" : s.evil ? " evil" : "");
+        div.innerHTML = `<span class="tag">${s.tag}</span>${s.text}<span class="url">${s.url}</span>`;
+        document.getElementById("log").appendChild(div);
+        div.scrollIntoView({ behavior: "smooth" });
+    }
+
+    function nextStep() {
+        step++;
+        if (step >= STEPS.length) return;
+        const s = STEPS[step];
+        clearActive();
+        s.active.forEach(id => {
+            const el = document.getElementById("c-" + id);
+            el.classList.add("active");
+            if (s.safe) el.classList.add("safe");
+            else if (s.evil) el.classList.add("evil");
+        });
+        drawArrow(s.from, s.to, s.evil, s.safe);
+        addLog(s);
+        document.getElementById("stepInd").textContent = "Step " + (step + 1) + " / " + STEPS.length;
+        if (step === STEPS.length - 1) document.getElementById("btnNext").disabled = true;
+    }
+
+    function reset() {
+        step = -1;
+        clearActive();
+        resizeCanvas();
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        document.getElementById("log").innerHTML = "";
+        document.getElementById("stepInd").textContent = "Step 0 / " + STEPS.length;
+        document.getElementById("btnNext").disabled = false;
+    }
+
+    document.getElementById("btnNext").addEventListener("click", nextStep);
+    document.getElementById("btnReset").addEventListener("click", reset);
+    window.addEventListener("resize", () => {
+        if (step >= 0) drawArrow(STEPS[step].from, STEPS[step].to, STEPS[step].evil, STEPS[step].safe);
+    });
+
+    resizeCanvas();
+})();
+</script>
+</body>
+</html>
